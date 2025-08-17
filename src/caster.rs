@@ -3,15 +3,18 @@ use crate::framebuffer::Framebuffer;
 use crate::maze::Maze;
 use crate::player::Player;
 
+//class that throws rays that impact the maze walls and returns the intersection data
+
 pub struct Intersect {
-  pub distance: f32,    // distancia perpendicular (en unidades de mundo / pixeles)
-  pub impact: char,     // caracter de pared
-  pub hit_x: f32,       // coord mundo del impacto (centro aproximado celda)
-  pub hit_y: f32,
-  pub side: i32,        // 0 = cara vertical golpeada, 1 = cara horizontal
-  pub wall_x: f32,      // fracción [0,1) horizontal dentro de la pared (coord textura)
+  pub distance: f32,    //distance to thw walls
+  pub impact: char,     //symbol of the wall hit
+  pub hit_x: f32,       // X coordinate of the impact in world coordinates
+  pub hit_y: f32,      
+  pub side: i32,        // 0 vertical, 1 horizontal
+  pub wall_x: f32,      // X coordinate of the wall hit in grid coordinates
 }
 
+//function to cast a ray in the maze
 pub fn cast_ray(
   framebuffer: &mut Framebuffer,
   maze: &Maze,
@@ -26,21 +29,21 @@ pub fn cast_ray(
   if maze_h == 0 { return empty(); }
   let maze_w = maze[0].len();
 
-  // Posición jugador en coordenadas de grid
+  // place player position in grid coordinates
   let pos_x = player.pos.x / block_size as f32;
   let pos_y = player.pos.y / block_size as f32;
   let dir_x = a.cos();
   let dir_y = a.sin();
 
-  // Distancias delta para cruzar una celda completa en X/Y
+  // Distances delta to cross a full cell in X/Y
   let delta_x = if dir_x == 0.0 { f32::INFINITY } else { (1.0 / dir_x).abs() };
   let delta_y = if dir_y == 0.0 { f32::INFINITY } else { (1.0 / dir_y).abs() };
 
-  // Celda actual
+  // actual grid coordinates of the player
   let mut map_x = pos_x.floor() as isize;
   let mut map_y = pos_y.floor() as isize;
 
-  // Distancia inicial hasta primer lado en X e Y + pasos
+  // step direction and initial distance to the next grid line
   let (step_x, mut side_dist_x) = if dir_x < 0.0 {
     (-1, (pos_x - map_x as f32) * delta_x)
   } else { (1, ((map_x as f32 + 1.0) - pos_x) * delta_x) };
@@ -48,9 +51,9 @@ pub fn cast_ray(
     (-1, (pos_y - map_y as f32) * delta_y)
   } else { (1, ((map_y as f32 + 1.0) - pos_y) * delta_y) };
 
-  let mut side: i32; // 0 vertical, 1 horizontal
+  let mut side: i32; 
 
-  for _ in 0..10_000 { // límite seguridad
+  for _ in 0..10_000 {
     if side_dist_x < side_dist_y {
       side_dist_x += delta_x;
       map_x += step_x;
@@ -73,7 +76,6 @@ pub fn cast_ray(
         (map_y as f32 - pos_y + (1 - step_y) as f32 / 2.0) / dir_y
       };
 
-      // wall_x
       let mut wall_x = if side == 0 { pos_y + perp_dist * dir_y } else { pos_x + perp_dist * dir_x };
       wall_x -= wall_x.floor();
 
@@ -91,7 +93,7 @@ fn empty() -> Intersect {
   Intersect { distance: 0.0, impact: ' ', hit_x: 0.0, hit_y: 0.0, side: 0, wall_x: 0.0 }
 }
 
-// Ray debug (ray marching simple) para modo 2D.
+
 fn cast_ray_debug(
   framebuffer: &mut Framebuffer,
   maze: &Maze,

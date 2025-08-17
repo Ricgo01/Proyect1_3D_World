@@ -96,13 +96,58 @@ fn render_world(
   let half_h = framebuffer.height as i32 / 2;
   let proj_plane = (num_rays as f32) / (2.0 * (player.fov * 0.5).tan());
 
+  // Cielo
+  for y in 0..half_h { // y entero
+    let v = y as f32 / half_h as f32; // 0..1
+    for x in 0..framebuffer.width as u32 {
+      let u = (player.a / (2.0 * PI)) + (x as f32 / framebuffer.width as f32);
+      let col = tex.sample_sky(u, v);
+      framebuffer.set_current_color(col);
+      framebuffer.set_pixel(x, y as u32);
+    }
+  }
+
+  // Suelo (floor casting simplificado)
+  let dir_left_angle = player.a - player.fov * 0.5;
+  let dir_right_angle = player.a + player.fov * 0.5;
+  let dir_left = Vector2::new(dir_left_angle.cos(), dir_left_angle.sin());
+  let dir_right = Vector2::new(dir_right_angle.cos(), dir_right_angle.sin());
+  let px = player.pos.x / block_size as f32;
+  let py = player.pos.y / block_size as f32;
+
+  for sy in half_h..(framebuffer.height as i32) {
+    let p = (sy - half_h) as f32;
+    if p < 1.0 { continue; }
+    let row_dist = (0.5 * framebuffer.height as f32) / p;
+
+    // Pre-shade por fila
+    let shade = (1.0 / (1.0 + row_dist * 0.15)).clamp(0.15, 1.0);
+
+    let step_x = row_dist * (dir_right.x - dir_left.x) / num_rays as f32;
+    let step_y = row_dist * (dir_right.y - dir_left.y) / num_rays as f32;
+    let mut floor_x = px + row_dist * dir_left.x;
+    let mut floor_y = py + row_dist * dir_left.y;
+
+    for sx in 0..num_rays {
+      let u = floor_x.fract();
+      let v = floor_y.fract();
+      let mut col = tex.sample_ground(u, v);
+      col.r = (col.r as f32 * shade) as u8;
+      col.g = (col.g as f32 * shade) as u8;
+      col.b = (col.b as f32 * shade) as u8;
+      framebuffer.set_pixel_color(sx as u32, sy as u32, col);
+      floor_x += step_x;
+      floor_y += step_y;
+    }
+  }
+
+  // Muros
   for sx in 0..num_rays {
     let cam_x = (2.0 * sx as f32 / num_rays as f32) - 1.0; // [-1,1]
     let ray_angle = player.a + cam_x * (player.fov * 0.5);
     let inter = cast_ray(framebuffer, maze, player, ray_angle, block_size, false);
     if inter.impact == ' ' || inter.distance <= 0.0 { continue; }
 
-    // inter.distance ya es perpendicular (DDA)
     let dist = inter.distance;
     let wall_h = (block_size as f32 * proj_plane / dist) as i32;
     let mut top = half_h - wall_h / 2;
@@ -112,23 +157,28 @@ fn render_world(
 
     let (tw, th) = tex.get_size(inter.impact);
     let mut tx = (inter.wall_x * tw as f32) as u32;
-    // Invertir para mantener orientación según dirección
     if inter.side == 0 && ray_angle.cos() > 0.0 { tx = tw.saturating_sub(1) - tx; }
     if inter.side == 1 && ray_angle.sin() < 0.0 { tx = tw.saturating_sub(1) - tx; }
 
+    let base = (1.0 / (1.0 + dist * 0.002)).clamp(0.2, 1.0);
+    let side_factor = if inter.side == 1 { 0.75 } else { 1.0 };
+    let shade = (base * side_factor).clamp(0.15, 1.0);
+
     let column_h = (bottom - top).max(1) as f32;
+    let ty_step = th as f32 / column_h;
+    let mut ty_f = 0.0;
+
     for sy in top..=bottom {
-      let rel = (sy - top) as f32 / column_h;
-      let ty = (rel * th as f32) as u32;
-      let mut color = tex.sample(inter.impact, tx, ty);
-      let base = (1.0 / (1.0 + dist * 0.002)).clamp(0.2, 1.0);
-      let side_factor = if inter.side == 1 { 0.75 } else { 1.0 }; // caras horizontales más oscuras
-      let shade = (base * side_factor).clamp(0.15, 1.0);
-      color.r = (color.r as f32 * shade) as u8;
-      color.g = (color.g as f32 * shade) as u8;
-      color.b = (color.b as f32 * shade) as u8;
-      framebuffer.set_current_color(color);
-      framebuffer.set_pixel(sx as u32, sy as u32);
+      let ty = ty_f as u32;
+      ty_f += ty_step;
+
+      let mut c = tex.sample(inter.impact, tx, ty);
+      // Aplicar shade
+      c.r = (c.r as f32 * shade) as u8;
+      c.g = (c.g as f32 * shade) as u8;
+      c.b = (c.b as f32 * shade) as u8;
+
+      framebuffer.set_pixel_color(sx as u32, sy as u32, c);
     }
   }
 }
@@ -180,7 +230,7 @@ fn main() {
       render_world(&mut framebuffer, &maze, block_size, &player, &tex_manager);
     }
 
-    framebuffer.swap_buffers(&mut window, &raylib_thread);
+    framebuffer.swap_buffers(&mut window, &raylib_thread, true);
     thread::sleep(Duration::from_millis(16));
   }
 }

@@ -21,12 +21,19 @@ impl Framebuffer {
     }
 
     pub fn clear(&mut self) {
-        self.color_buffer = Image::gen_image_color(self.width as i32, self.height as i32, self.background_color);
+
+        self.color_buffer.clear_background(self.background_color);
     }
 
     pub fn set_pixel(&mut self, x: u32, y: u32) {
         if x < self.width && y < self.height {
             self.color_buffer.draw_pixel(x as i32, y as i32, self.current_color);
+        }
+    }
+
+    pub fn set_pixel_color(&mut self, x: u32, y: u32, color: Color) {
+        if x < self.width && y < self.height {
+            self.color_buffer.draw_pixel(x as i32, y as i32, color);
         }
     }
 
@@ -46,10 +53,23 @@ impl Framebuffer {
         &self,
         window: &mut RaylibHandle,
         raylib_thread: &RaylibThread,
+        fps: bool,
     ) {
         if let Ok(texture) = window.load_texture_from_image(raylib_thread, &self.color_buffer) {
             let mut renderer = window.begin_drawing(raylib_thread);
             renderer.draw_texture(&texture, 0, 0, Color::WHITE);
+        
+
+            if fps {
+                let num_fps = renderer.get_fps();
+                let fps_text = format!("FPS: {num_fps}");
+                let font_size = 20;
+                let text_width = renderer.measure_text(&fps_text, font_size);
+
+                let x = self.width as i32 - text_width - 10;
+                let y = 10;
+                renderer.draw_text(&fps_text, x, y, font_size, Color::WHITE);
+            }
         }
     }
 }
