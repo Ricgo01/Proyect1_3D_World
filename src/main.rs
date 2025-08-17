@@ -61,28 +61,40 @@ fn draw_cell(
   }
 }
 
-pub fn render_maze(
-  framebuffer: &mut Framebuffer,
-  maze: &Maze,
-  block_size: usize,
-  player: &Player,
+const PLAYER_MINIMAP_COLOR: Color = Color::new(255, 80, 0, 255);
+
+fn render_minimap(
+    framebuffer: &mut Framebuffer,
+    maze: &Maze,
+    block_size: usize,
+    player: &Player,
+    origin_x: u32,
+    origin_y: u32,
+    cell_px: u32,
 ) {
-  for (row_index, row) in maze.iter().enumerate() {
-    for (col_index, &cell) in row.iter().enumerate() {
-      let xo = col_index * block_size;
-      let yo = row_index * block_size;
-      draw_cell(framebuffer, xo, yo, block_size, cell);
+    for (row_i, row) in maze.iter().enumerate() {
+        for (col_i, &cell) in row.iter().enumerate() {
+            if cell == ' ' { continue; }
+            let color = cell_to_color(cell);
+            for py in 0..cell_px {
+                for px in 0..cell_px {
+                    framebuffer.set_pixel_color(
+                        origin_x + col_i as u32 * cell_px + px,
+                        origin_y + row_i as u32 * cell_px + py,
+                        color
+                    );
+                }
+            }
+        }
     }
-  }
 
-  framebuffer.set_current_color(Color::WHITESMOKE);
-
-  let num_rays = 5;
-  for i in 0..num_rays {
-    let current_ray = i as f32 / num_rays as f32; // current ray divided by total rays
-    let a = player.a - (player.fov / 2.0) + (player.fov * current_ray);
-    cast_ray(framebuffer, &maze, &player, a, block_size, true);
-  }
+    let px_cell = player.pos.x / block_size as f32;
+    let py_cell = player.pos.y / block_size as f32;
+    let pxm = origin_x + (px_cell * cell_px as f32) as u32;
+    let pym = origin_y + (py_cell * cell_px as f32) as u32;
+    framebuffer.set_pixel_color(pxm,   pym,   PLAYER_MINIMAP_COLOR);
+    framebuffer.set_pixel_color(pxm+1, pym,   PLAYER_MINIMAP_COLOR);
+    framebuffer.set_pixel_color(pxm,   pym+1, PLAYER_MINIMAP_COLOR);
 }
 
 fn render_world(
@@ -181,7 +193,10 @@ fn render_world(
       framebuffer.set_pixel_color(sx as u32, sy as u32, c);
     }
   }
+  
 }
+
+
 
 fn main() {
   let window_width = 1300;
@@ -211,24 +226,20 @@ fn main() {
   let mut tex_manager = TextureManager::new();
   tex_manager.load_defaults();
 
-  // Persistir modo fuera del loop
-  let mut mode = "3D";
-
   while !window.window_should_close() {
     let dt = window.get_frame_time();
     process_events(&mut player, &window, dt, &maze, block_size);
 
-    if window.is_key_pressed(KeyboardKey::KEY_M) {
-      mode = if mode == "2D" { "3D" } else { "2D" };
-    }
-
     framebuffer.clear();
 
-    if mode == "2D" {
-      render_maze(&mut framebuffer, &maze, block_size, &player);
-    } else {
-      render_world(&mut framebuffer, &maze, block_size, &player, &tex_manager);
-    }
+    render_world(&mut framebuffer, &maze, block_size, &player, &tex_manager);
+
+    let cell_px = 16;
+    let mini_h = maze.len() as u32 * cell_px;
+    let margin = 8;
+    let ox = margin;
+    let oy = framebuffer.height - mini_h - margin;
+    render_minimap(&mut framebuffer, &maze, block_size, &player, ox, oy, cell_px);
 
     framebuffer.swap_buffers(&mut window, &raylib_thread, true);
     thread::sleep(Duration::from_millis(16));
