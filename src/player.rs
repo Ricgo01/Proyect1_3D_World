@@ -1,6 +1,7 @@
 use raylib::prelude::*;
 use std::f32::consts::PI;
 use crate::maze::Maze;
+use raylib::audio::{RaylibAudio, Sound};
 
 pub struct Player {
     pub pos: Vector2,
@@ -30,7 +31,7 @@ fn colision (maze: &Maze, block_size: usize, x: f32, y: f32, radius: f32) -> boo
 }
 
 // function that procces the player events this is called in th emain render loop
-pub fn process_events(player: &mut Player, rl: &RaylibHandle, dt: f32, maze: &Maze, block_size: usize) {
+pub fn process_events(player: &mut Player, rl: &RaylibHandle, dt: f32, maze: &Maze, block_size: usize, audio: Option<&mut Sound>) {
     //Velocities of forward, lateral, rotation and the mouse movement for the player
     //Change these values to increse or deacrese the movement speed
     const MOVE_SPEED: f32 = 36.0;
@@ -55,7 +56,9 @@ pub fn process_events(player: &mut Player, rl: &RaylibHandle, dt: f32, maze: &Ma
     let mut new_x = player.pos.x;
     let mut new_y = player.pos.y;
 
-    // Avanzar
+    let mut moved = false;
+
+    // forward
     if rl.is_key_down(KeyboardKey::KEY_W) || rl.is_key_down(KeyboardKey::KEY_UP) {
         let tx = new_x + forward.x * MOVE_SPEED * dt;
         let ty = new_y + forward.y * MOVE_SPEED * dt;
@@ -63,8 +66,9 @@ pub fn process_events(player: &mut Player, rl: &RaylibHandle, dt: f32, maze: &Ma
             new_x = tx;
             new_y = ty;
         }
+        moved = true;
     }
-    // Retroceder
+    // backward
     if rl.is_key_down(KeyboardKey::KEY_S) || rl.is_key_down(KeyboardKey::KEY_DOWN) {
         let tx = new_x - forward.x * MOVE_SPEED * dt;
         let ty = new_y - forward.y * MOVE_SPEED * dt;
@@ -72,8 +76,9 @@ pub fn process_events(player: &mut Player, rl: &RaylibHandle, dt: f32, maze: &Ma
             new_x = tx;
             new_y = ty;
         }
+        moved = true;
     }
-    // Strafe derecha
+    // right strafe
     if rl.is_key_down(KeyboardKey::KEY_D) || rl.is_key_down(KeyboardKey::KEY_RIGHT) {
         let tx = new_x + right.x * LATERAL_SPEED * dt;
         let ty = new_y + right.y * LATERAL_SPEED * dt;
@@ -81,8 +86,9 @@ pub fn process_events(player: &mut Player, rl: &RaylibHandle, dt: f32, maze: &Ma
             new_x = tx;
             new_y = ty;
         }
+        moved = true;
     }
-    // Strafe izquierda
+    // left strafe
     if rl.is_key_down(KeyboardKey::KEY_A) || rl.is_key_down(KeyboardKey::KEY_LEFT) {
         let tx = new_x - right.x * LATERAL_SPEED * dt;
         let ty = new_y - right.y * LATERAL_SPEED * dt;
@@ -90,9 +96,18 @@ pub fn process_events(player: &mut Player, rl: &RaylibHandle, dt: f32, maze: &Ma
             new_x = tx;
             new_y = ty;
         }
+        moved = true;
     }
 
-    // Asignar al final
+    if moved {
+        // usar el sonido pasado desde main
+        if let Some(sound) = audio {
+            if !sound.is_playing() {
+                sound.play();
+            }
+        }
+    }
+
     player.pos.x = new_x;
     player.pos.y = new_y;
 }

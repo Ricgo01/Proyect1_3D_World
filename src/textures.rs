@@ -22,13 +22,15 @@ impl TextureManager {
             ('+', "assets/secret.png"),
             ('-', "assets/dance.png"),
             ('|', "assets/mall.png"),
-            ('g', "assets/wall4.png"),
-            ('#', "assets/wall5.png"),
+            ('e', "assets/enemy.png"),
+            ('f', "assets/enemy2.png"),
+            ('k', "assets/key.png"),
+            ('p', "assets/puffle.png")
         ];
         for (ch, path) in files { self.load_one(ch, path); }
         // Cargar cielo y suelo
         self.load_sky("assets/sky.png");
-        self.load_ground("assets/ground.png");
+        self.load_ground("assets/ice1.png");
     }
 
     fn load_sky(&mut self, path: &str) {

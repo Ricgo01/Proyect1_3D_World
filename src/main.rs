@@ -7,19 +7,28 @@ mod framebuffer;
 mod maze;
 mod caster;
 mod player;
-mod textures; // añadido
+mod textures;
+mod sprites;
 
 use line::line;
 use maze::{Maze,load_maze};
 use caster::{cast_ray, Intersect};
 use framebuffer::Framebuffer;
 use player::{Player, process_events};
-use textures::TextureManager; // añadido
+use textures::TextureManager;
+use sprites::{draw_sprites, Enemy};
 
-use raylib::prelude::*;
+use raylib::{ffi::RL_TEXTURE_MIN_FILTER, prelude::*};
 use std::thread;
 use std::time::Duration;
 use std::f32::consts::PI;
+use raylib::core::audio::{RaylibAudio, Sound};
+
+#[derive(Copy, Clone, PartialEq)]
+enum GameState {
+    Start,
+    Playing,
+}
 
 fn cell_to_color(cell: char) -> Color {
   match cell {
@@ -103,6 +112,7 @@ fn render_world(
   block_size: usize,
   player: &Player,
   tex: &TextureManager,
+  depth_buffer: &mut [f32],
 ) {
   let num_rays = framebuffer.width as usize;
   let half_h = framebuffer.height as i32 / 2;
@@ -158,8 +168,12 @@ fn render_world(
     let cam_x = (2.0 * sx as f32 / num_rays as f32) - 1.0; // [-1,1]
     let ray_angle = player.a + cam_x * (player.fov * 0.5);
     let inter = cast_ray(framebuffer, maze, player, ray_angle, block_size, false);
-    if inter.impact == ' ' || inter.distance <= 0.0 { continue; }
+    if inter.impact == ' ' || inter.distance <= 0.0 { 
+      depth_buffer[sx] = f32::INFINITY;
+      continue; 
+    }
 
+    depth_buffer[sx] = inter.distance;
     let dist = inter.distance;
     let wall_h = (block_size as f32 * proj_plane / dist) as i32;
     let mut top = half_h - wall_h / 2;
@@ -211,6 +225,35 @@ fn main() {
 
   window.disable_cursor();
 
+  let mut game_start = GameState::Start;
+
+  let audio = match RaylibAudio::init_audio_device() {
+        Ok(dev) => dev,
+        Err(e) => {
+            eprintln!("No se pudo inicializar el audio: {e}");
+            return;
+        }
+  };
+
+
+  let mut footstep_sound: Sound = match audio.new_sound("assets/sounds/steps.wav") {
+    Ok(snd) => snd,
+    Err(e) => {
+        eprintln!("Failed to load footstep sound: {e}");
+        return;
+    }
+  };
+
+  let taylor: Sound = match audio.new_sound("assets/sounds/tay.wav") {
+    Ok(snd) => snd,
+    Err(e) => {
+        eprintln!("Failed to load footstep sound: {e}");
+        return;
+    }
+  };
+
+
+
   let mut framebuffer = Framebuffer::new(window_width as u32, window_height as u32);
   framebuffer.set_background_color(Color::new(50, 50, 100, 255));
 
@@ -222,17 +265,79 @@ fn main() {
     fov: PI / 3.0,
   };
 
-  // Cargar texturas una sola vez
+   let mut enemies = vec![
+      Enemy::new(5.5 * block_size as f32, 1.5 * block_size as f32, 'e'),
+      Enemy::new(3.5 * block_size as f32, 2.5 * block_size as f32, 'f'),
+      Enemy::new(4.5 * block_size as f32, 1.5 * block_size as f32, 'k'),
+      Enemy::new(6.5 * block_size as f32, 1.5 * block_size as f32, 'p'),
+      
+  ];
+
+  let mut depth_buffer = vec![0.0f32; window_width as usize];
   let mut tex_manager = TextureManager::new();
   tex_manager.load_defaults();
 
   while !window.window_should_close() {
-    let dt = window.get_frame_time();
-    process_events(&mut player, &window, dt, &maze, block_size);
 
+    if game_start == GameState::Start {
+          if window.is_key_pressed(KeyboardKey::KEY_ENTER) {
+              game_start= GameState::Playing;
+          } else {
+              let mut d = window.begin_drawing(&raylib_thread);
+              d.clear_background(Color::BLACK);
+              d.draw_text("RAYCASTER", 60, 80, 70, Color::WHITE);
+              d.draw_text("Presiona ENTER para empezar", 60, 200, 30, Color::RAYWHITE);
+              d.draw_text("WASD / Flechas = mover, ESC = salir", 60, 250, 20, Color::GRAY);
+              d.draw_text("Version demo", 60, 290, 20, Color::DARKGRAY);
+              continue;
+          }
+      }
+    
+    let dt = window.get_frame_time();
+
+    process_events(&mut player, &window, dt, &maze, block_size, Some(&mut footstep_sound));
+    
+    let tay_proximity: f32 = 200.0;
+    let mut any_p_in_range = false;
+
+    for enemy in &enemies {
+      if enemy.id == 'p' {
+          let dx = enemy.pos.x - player.pos.x;
+          let dy = enemy.pos.y - player.pos.y;
+          let dist_sq = dx*dx + dy*dy;
+
+          if dist_sq < tay_proximity * tay_proximity {
+              any_p_in_range = true;
+              break;
+          }
+        }
+    }
+
+    if any_p_in_range {
+        if !taylor.is_playing() {
+            taylor.play();
+        }
+    } else {
+        if taylor.is_playing() {
+            taylor.stop();
+        }
+    }
     framebuffer.clear();
 
-    render_world(&mut framebuffer, &maze, block_size, &player, &tex_manager);
+    let proj_plane = (framebuffer.width as f32) / (2.0 * (player.fov * 0.5).tan());
+
+
+    render_world(&mut framebuffer, &maze, block_size, &player, &tex_manager, &mut depth_buffer);
+
+    draw_sprites(
+        &mut framebuffer,
+        &player,
+        &mut enemies,
+        &tex_manager,
+        &depth_buffer,
+        proj_plane,
+        block_size,
+    );
 
     let cell_px = 16;
     let mini_h = maze.len() as u32 * cell_px;
