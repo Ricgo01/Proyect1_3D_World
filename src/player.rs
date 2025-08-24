@@ -26,7 +26,7 @@ fn colision (maze: &Maze, block_size: usize, x: f32, y: f32, radius: f32) -> boo
         let gy = (j as usize) / block_size;
         if gy >= maze.len() || gx >= maze[0].len() { return false; }
         if maze[gy][gx] != ' ' { return false; }
-    } 
+    }
     true
 }
 
@@ -34,13 +34,12 @@ fn colision (maze: &Maze, block_size: usize, x: f32, y: f32, radius: f32) -> boo
 pub fn process_events(player: &mut Player, rl: &RaylibHandle, dt: f32, maze: &Maze, block_size: usize, audio: Option<&mut Sound>) {
     //Velocities of forward, lateral, rotation and the mouse movement for the player
     //Change these values to increse or deacrese the movement speed
-    const MOVE_SPEED: f32 = 36.0;
-    const LATERAL_SPEED: f32 = 36.0;
-    const ROTATION_SPEED: f32 = PI / 30.0;
+    const MOVE_SPEED: f32 = 60.0;
+    const LATERAL_SPEED: f32 = 60.0;
     const MOUSE_MOVE_SPEED: f32 = 0.0025;
     const PLAYER_RADIUS: f32 = 12.0;
 
-    //mouse delta to rotate the player
+    // Rotación SOLO mouse
     let md = rl.get_mouse_delta();
     player.a += md.x * MOUSE_MOVE_SPEED;
 
@@ -48,53 +47,46 @@ pub fn process_events(player: &mut Player, rl: &RaylibHandle, dt: f32, maze: &Ma
     if player.a > PI { player.a -= 2.0 * PI; }
     if player.a < -PI { player.a += 2.0 * PI; }
 
-    // mutables variables to calculate the forward and right vectors
     let forward = Vector2::new(player.a.cos(), player.a.sin());
     let right = Vector2::new(-forward.y, forward.x);
 
-    // Movimiento inmediato: intentamos cada dirección y sólo aplicamos si no hay colisión
     let mut new_x = player.pos.x;
     let mut new_y = player.pos.y;
-
     let mut moved = false;
 
-    // forward
+    // Adelante (W / UP)
     if rl.is_key_down(KeyboardKey::KEY_W) || rl.is_key_down(KeyboardKey::KEY_UP) {
         let tx = new_x + forward.x * MOVE_SPEED * dt;
         let ty = new_y + forward.y * MOVE_SPEED * dt;
         if colision(maze, block_size, tx, ty, PLAYER_RADIUS) {
-            new_x = tx;
-            new_y = ty;
+            new_x = tx; new_y = ty;
         }
         moved = true;
     }
-    // backward
+    // Atrás (S / DOWN)
     if rl.is_key_down(KeyboardKey::KEY_S) || rl.is_key_down(KeyboardKey::KEY_DOWN) {
         let tx = new_x - forward.x * MOVE_SPEED * dt;
         let ty = new_y - forward.y * MOVE_SPEED * dt;
         if colision(maze, block_size, tx, ty, PLAYER_RADIUS) {
-            new_x = tx;
-            new_y = ty;
+            new_x = tx; new_y = ty;
         }
         moved = true;
     }
-    // right strafe
+    // Strafe derecha (D / RIGHT)
     if rl.is_key_down(KeyboardKey::KEY_D) || rl.is_key_down(KeyboardKey::KEY_RIGHT) {
         let tx = new_x + right.x * LATERAL_SPEED * dt;
         let ty = new_y + right.y * LATERAL_SPEED * dt;
         if colision(maze, block_size, tx, ty, PLAYER_RADIUS) {
-            new_x = tx;
-            new_y = ty;
+            new_x = tx; new_y = ty;
         }
         moved = true;
     }
-    // left strafe
+    // Strafe izquierda (A / LEFT)
     if rl.is_key_down(KeyboardKey::KEY_A) || rl.is_key_down(KeyboardKey::KEY_LEFT) {
         let tx = new_x - right.x * LATERAL_SPEED * dt;
         let ty = new_y - right.y * LATERAL_SPEED * dt;
         if colision(maze, block_size, tx, ty, PLAYER_RADIUS) {
-            new_x = tx;
-            new_y = ty;
+            new_x = tx; new_y = ty;
         }
         moved = true;
     }

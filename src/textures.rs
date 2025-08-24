@@ -19,13 +19,17 @@ impl TextureManager {
 
     pub fn load_defaults(&mut self) {
         let files = [
-            ('+', "assets/secret.png"),
-            ('-', "assets/dance.png"),
-            ('|', "assets/mall.png"),
+            ('+', "assets/center.png"),
+            ('-', "assets/playa.png"),
+            ('|', "assets/plaza.png"),
             ('e', "assets/enemy.png"),
             ('f', "assets/enemy2.png"),
             ('k', "assets/key.png"),
-            ('p', "assets/puffle.png")
+            ('p', "assets/puffle.png"),
+            ('g', "assets/iglo.png"),
+            ('w', "assets/win.png"),
+            ('o', "assets/over.png"),
+            ('c', "assets/granpa.png")
         ];
         for (ch, path) in files { self.load_one(ch, path); }
         // Cargar cielo y suelo

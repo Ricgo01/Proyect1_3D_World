@@ -98,12 +98,38 @@ pub fn draw_sprites(
         let draw_start_x = (sprite_screen_x - sprite_width * 0.5).max(0.0) as i32;
         let draw_end_x = (sprite_screen_x + sprite_width * 0.5).min(screen_w as f32) as i32;
 
+        // --- NUEVO: CULLING POR OCULSION TOTAL ANTES DE RECORRER STRIPES ---
+        // Si todas las columnas que ocuparía el sprite tienen una pared más cercana en depth_buffer,
+        // podemos descartar el sprite completo.
+        if draw_end_x > draw_start_x {
+            let sx0 = draw_start_x.max(0) as usize;
+            let mut sx1 = draw_end_x.max(0) as usize;
+            if sx1 >= screen_w as usize { sx1 = screen_w as usize - 1; }
+            if sx0 < sx1 && sx1 < depth_buffer.len() {
+                // Muestreamos cada 2 columnas para reducir costo; buscamos la mínima profundidad de pared.
+                let mut min_depth = f32::INFINITY;
+                let mut i = sx0;
+                while i <= sx1 {
+                    let d = depth_buffer[i];
+                    if d < min_depth { min_depth = d; }
+                    i += 2; // salto
+                }
+                // También incluimos la última si no cayó exacto en el salto
+                let last_d = depth_buffer[sx1];
+                if last_d < min_depth { min_depth = last_d; }
+                // Compare usando un pequeño margen (0.98) para evitar errores por diferencias de proyección.
+                if dist_corrected > min_depth * 0.98 {
+                    continue; // totalmente detrás de paredes visibles
+                }
+            }
+        }
+
         // 7. Dibujar las columnas verticales del sprite (stripes)
         for stripe in draw_start_x..draw_end_x {
             let stripe_idx = stripe as usize;
             if stripe_idx >= screen_w as usize { continue; }
 
-            // Oclusión con el Z-buffer de las paredes
+            // Oclusión con el Z-buffer de las paredes (por-columna)
             if dist_corrected > depth_buffer[stripe_idx] {
                 continue;
             }
